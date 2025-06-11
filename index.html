@@ -1,0 +1,119 @@
+<!-- Group Spinner Tool (With Name Only + Role Assignment + Auto-Growing Groups + Admin) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Group Spinner Tool</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 2rem; }
+    button { padding: 1rem 2rem; font-size: 1.2rem; margin: 1rem; cursor: pointer; }
+    input { padding: 0.5rem; font-size: 1rem; margin: 1rem; }
+    .group-box { margin-top: 2rem; font-size: 1.5rem; font-weight: bold; }
+    .admin-table { margin-top: 2rem; text-align: left; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; }
+    .admin-table th, .admin-table td { padding: 0.5rem; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>Group Spinner Tool</h1>
+
+  <div id="view-selector">
+    <button onclick="showWithName()">Spin (With Name)</button>
+    <button onclick="showAdmin()">Admin View</button>
+  </div>
+
+  <div id="with-name-view" style="display:none;">
+    <input type="text" id="student-name" placeholder="Enter your name">
+    <button onclick="assignGroupWithName()">🎡 Spin</button>
+    <div class="group-box" id="with-name-result"></div>
+  </div>
+
+  <div id="admin-view" style="display:none;">
+    <h2>Admin Panel</h2>
+    <table class="admin-table">
+      <thead>
+        <tr><th>Group</th><th>Students & Roles</th></tr>
+      </thead>
+      <tbody id="admin-table-body"></tbody>
+    </table>
+  </div>
+
+<script>
+  let groupCapacities = {};
+  let groupCounts = {};
+  let groupRoles = {};
+  const nameAssignments = {};
+  const maxGroupSize = 5;
+
+  function assignGroupWithName() {
+    const name = document.getElementById('student-name').value.trim();
+    if (!name) return alert('Please enter your name.');
+    if (nameAssignments[name]) {
+      const { group, role } = nameAssignments[name];
+      return document.getElementById('with-name-result').textContent = `✅ You are already in ${group} as Role ${role}`;
+    }
+
+    let group = pickGroupBalanced();
+
+    if (!group) {
+      const newGroupNumber = Object.keys(groupCounts).length + 1;
+      group = `Group ${newGroupNumber}`;
+      groupCapacities[group] = maxGroupSize;
+      groupCounts[group] = 0;
+      groupRoles[group] = new Set();
+    }
+
+    const usedRoles = groupRoles[group];
+    let role;
+    for (let i = 1; i <= maxGroupSize; i++) {
+      if (!usedRoles.has(i)) {
+        role = i;
+        break;
+      }
+    }
+
+    if (!role) return document.getElementById('with-name-result').textContent = 'No roles available in group!';
+
+    groupCounts[group]++;
+    usedRoles.add(role);
+    nameAssignments[name] = { group, role };
+    document.getElementById('with-name-result').textContent = `🎉 ${name}, you are in ${group} as Role ${role}!`;
+    updateAdmin();
+  }
+
+  function pickGroupBalanced() {
+    const groups = Object.entries(groupCounts)
+      .filter(([group, count]) => count < groupCapacities[group])
+      .sort((a, b) => a[1] - b[1]);
+    if (groups.length === 0) return null;
+    return groups[0][0];
+  }
+
+  function updateAdmin() {
+    const tbody = document.getElementById('admin-table-body');
+    tbody.innerHTML = '';
+    for (const group of Object.keys(groupCounts)) {
+      const students = Object.entries(nameAssignments)
+        .filter(([, v]) => v.group === group)
+        .map(([n, v]) => `${n} (Role ${v.role})`);
+      const row = `<tr><td>${group}</td><td>${students.join(', ') || '(none)'}</td></tr>`;
+      tbody.innerHTML += row;
+    }
+  }
+
+  function showWithName() {
+    hideAll();
+    document.getElementById('with-name-view').style.display = 'block';
+  }
+  function showAdmin() {
+    hideAll();
+    document.getElementById('admin-view').style.display = 'block';
+    updateAdmin();
+  }
+  function hideAll() {
+    document.getElementById('with-name-view').style.display = 'none';
+    document.getElementById('admin-view').style.display = 'none';
+  }
+</script>
+</body>
+</html>
