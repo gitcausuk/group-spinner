@@ -1,10 +1,12 @@
-<!-- Group Spinner Tool (Oxford SBS Edition - Password Protected Admin) -->
+<!-- Group Spinner Tool (Oxford SBS Edition - Firebase Sync Enabled) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Group Spinner Tool</title>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 2rem; }
     button { padding: 1rem 2rem; font-size: 1.2rem; margin: 1rem; cursor: pointer; }
@@ -12,13 +14,11 @@
     .group-box { margin-top: 2rem; font-size: 1.5rem; font-weight: bold; }
     .admin-table { margin-top: 2rem; text-align: left; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; }
     .admin-table th, .admin-table td { padding: 0.5rem; border: 1px solid #ccc; }
-    #logo { width: 200px; margin-bottom: 1rem; }
     #admin-view { display: none; }
     #admin-btn { font-size: 0.9rem; background: none; color: #555; border: none; text-decoration: underline; cursor: pointer; margin-top: 1rem; }
   </style>
 </head>
 <body>
-
   <h1>Group Spinner Tool</h1>
 
   <div id="view-selector">
@@ -43,17 +43,27 @@
   </div>
 
 <script>
-  let groupCapacities = {};
-  let groupCounts = {};
-  let groupRoles = {};
-  const nameAssignments = {};
+  const firebaseConfig = {
+    apiKey: "AIzaSyAcjM_P_w0hJFnKlKB7yPtuWMncLzEoo24",
+    authDomain: "group-spinner.firebaseapp.com",
+    projectId: "group-spinner",
+    storageBucket: "group-spinner.firebasestorage.app",
+    messagingSenderId: "323238343002",
+    appId: "1:323238343002:web:2766fdafa93a85d0dac363",
+    measurementId: "G-MZ27VGGBV4",
+    databaseURL: "https://group-spinner-default-rtdb.firebaseio.com"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
   const maxGroupSize = 5;
-  const adminPassword = "oxford2025"; // Change this password as needed
+  const adminPassword = "oxford2025";
 
   function requestAdminAccess() {
     const attempt = window.prompt("Enter admin password:");
     if (attempt === adminPassword) {
       document.getElementById('admin-view').style.display = 'block';
+      loadAdminData();
     } else {
       alert("Incorrect password.");
     }
@@ -62,61 +72,77 @@
   function assignGroupWithName() {
     const name = document.getElementById('student-name').value.trim();
     if (!name) return alert('Please enter your name.');
-    if (nameAssignments[name]) {
-      const { group, role } = nameAssignments[name];
-      return document.getElementById('with-name-result').textContent = `✅ You are already in ${group} as Role ${role}`;
-    }
 
-    let group = pickGroupBalanced();
-    if (!group) {
-      const newGroupNumber = Object.keys(groupCounts).length + 1;
-      group = `Group ${newGroupNumber}`;
-      groupCapacities[group] = maxGroupSize;
-      groupCounts[group] = 0;
-      groupRoles[group] = new Set();
-    }
-
-    const usedRoles = groupRoles[group];
-    let role;
-    for (let i = 1; i <= maxGroupSize; i++) {
-      if (!usedRoles.has(i)) {
-        role = i;
-        break;
+    db.ref('assignments/' + name).once('value', (snapshot) => {
+      if (snapshot.exists()) {
+        const { group, role } = snapshot.val();
+        document.getElementById('with-name-result').textContent = `✅ You are already in ${group} as Role ${role}`;
+      } else {
+        allocateNewGroup(name);
       }
-    }
-    if (!role) return document.getElementById('with-name-result').textContent = 'No roles available in group!';
-
-    groupCounts[group]++;
-    usedRoles.add(role);
-    nameAssignments[name] = { group, role };
-    document.getElementById('with-name-result').textContent = `🎉 ${name}, you are in ${group} as Role ${role}!`;
-    updateAdmin();
+    });
   }
 
-  function pickGroupBalanced() {
-    const groups = Object.entries(groupCounts)
-      .filter(([group, count]) => count < groupCapacities[group])
-      .sort((a, b) => a[1] - b[1]);
-    if (groups.length === 0) return null;
-    return groups[0][0];
+  function allocateNewGroup(name) {
+    db.ref('assignments').once('value', (snapshot) => {
+      const data = snapshot.val() || {};
+      const groupSizes = {};
+      const groupRoles = {};
+
+      for (const student in data) {
+        const entry = data[student];
+        if (!groupSizes[entry.group]) groupSizes[entry.group] = 0;
+        groupSizes[entry.group]++;
+        if (!groupRoles[entry.group]) groupRoles[entry.group] = new Set();
+        groupRoles[entry.group].add(entry.role);
+      }
+
+      let targetGroup = null;
+      let minSize = Infinity;
+
+      for (let i = 1; i <= Object.keys(groupSizes).length + 1; i++) {
+        const groupName = `Group ${i}`;
+        const size = groupSizes[groupName] || 0;
+        if (size < maxGroupSize && size < minSize) {
+          targetGroup = groupName;
+          minSize = size;
+        }
+      }
+
+      let role = 1;
+      const usedRoles = groupRoles[targetGroup] || new Set();
+      while (usedRoles.has(role)) role++;
+
+      db.ref('assignments/' + name).set({ group: targetGroup, role });
+      document.getElementById('with-name-result').textContent = `🎉 ${name}, you are in ${targetGroup} as Role ${role}!`;
+    });
   }
 
-  function updateAdmin() {
-    const tbody = document.getElementById('admin-table-body');
-    tbody.innerHTML = '';
-    for (const group of Object.keys(groupCounts)) {
-      const students = Object.entries(nameAssignments)
-        .filter(([, v]) => v.group === group)
-        .map(([n, v]) => `${n} (Role ${v.role})`);
-      const row = `<tr><td>${group}</td><td>${students.join(', ') || '(none)'}</td></tr>`;
-      tbody.innerHTML += row;
-    }
+  function loadAdminData() {
+    db.ref('assignments').on('value', (snapshot) => {
+      const data = snapshot.val() || {};
+      const groupMap = {};
+
+      for (const name in data) {
+        const { group, role } = data[name];
+        if (!groupMap[group]) groupMap[group] = [];
+        groupMap[group].push(`${name} (Role ${role})`);
+      }
+
+      const tbody = document.getElementById('admin-table-body');
+      tbody.innerHTML = '';
+      Object.keys(groupMap).sort().forEach(group => {
+        const row = `<tr><td>${group}</td><td>${groupMap[group].join(', ')}</td></tr>`;
+        tbody.innerHTML += row;
+      });
+    });
   }
 
   function showWithName() {
     hideAll();
     document.getElementById('with-name-view').style.display = 'block';
   }
+
   function hideAll() {
     document.getElementById('with-name-view').style.display = 'none';
     document.getElementById('admin-view').style.display = 'none';
