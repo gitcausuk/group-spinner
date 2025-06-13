@@ -1,4 +1,4 @@
-<!-- Group Spinner Tool (With Name Only + Role Assignment + Auto-Growing Groups + Admin) -->
+<!-- Group Spinner Tool (Oxford SBS Edition - Password Protected Admin) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,14 +12,18 @@
     .group-box { margin-top: 2rem; font-size: 1.5rem; font-weight: bold; }
     .admin-table { margin-top: 2rem; text-align: left; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; }
     .admin-table th, .admin-table td { padding: 0.5rem; border: 1px solid #ccc; }
+    #logo { width: 200px; margin-bottom: 1rem; }
+    #admin-view { display: none; }
+    #admin-btn { font-size: 0.9rem; background: none; color: #555; border: none; text-decoration: underline; cursor: pointer; margin-top: 1rem; }
   </style>
 </head>
 <body>
+  <img id="logo" src="Teaching at Said logo4.png" alt="Oxford SBS Logo">
   <h1>Group Spinner Tool</h1>
 
   <div id="view-selector">
     <button onclick="showWithName()">Spin (With Name)</button>
-    <button onclick="showAdmin()">Admin View</button>
+    <button id="admin-btn" onclick="requestAdminAccess()">For Admin</button>
   </div>
 
   <div id="with-name-view" style="display:none;">
@@ -28,7 +32,7 @@
     <div class="group-box" id="with-name-result"></div>
   </div>
 
-  <div id="admin-view" style="display:none;">
+  <div id="admin-view">
     <h2>Admin Panel</h2>
     <table class="admin-table">
       <thead>
@@ -44,6 +48,16 @@
   let groupRoles = {};
   const nameAssignments = {};
   const maxGroupSize = 5;
+  const adminPassword = "oxford2024"; // Change this password as needed
+
+  function requestAdminAccess() {
+    const attempt = window.prompt("Enter admin password:");
+    if (attempt === adminPassword) {
+      document.getElementById('admin-view').style.display = 'block';
+    } else {
+      alert("Incorrect password.");
+    }
+  }
 
   function assignGroupWithName() {
     const name = document.getElementById('student-name').value.trim();
@@ -54,7 +68,6 @@
     }
 
     let group = pickGroupBalanced();
-
     if (!group) {
       const newGroupNumber = Object.keys(groupCounts).length + 1;
       group = `Group ${newGroupNumber}`;
@@ -71,7 +84,6 @@
         break;
       }
     }
-
     if (!role) return document.getElementById('with-name-result').textContent = 'No roles available in group!';
 
     groupCounts[group]++;
@@ -104,11 +116,6 @@
   function showWithName() {
     hideAll();
     document.getElementById('with-name-view').style.display = 'block';
-  }
-  function showAdmin() {
-    hideAll();
-    document.getElementById('admin-view').style.display = 'block';
-    updateAdmin();
   }
   function hideAll() {
     document.getElementById('with-name-view').style.display = 'none';
