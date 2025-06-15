@@ -1,152 +1,107 @@
-<!-- Group Spinner Tool (Oxford SBS Edition - Firebase Sync Enabled) -->
+<!-- Final Group Spinner Tool with Firebase databaseURL included -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Group Spinner Tool</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Group Spinner</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 2rem; }
-    button { padding: 1rem 2rem; font-size: 1.2rem; margin: 1rem; cursor: pointer; }
-    input { padding: 0.5rem; font-size: 1rem; margin: 1rem; }
-    .group-box { margin-top: 2rem; font-size: 1.5rem; font-weight: bold; }
-    .admin-table { margin-top: 2rem; text-align: left; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; }
-    .admin-table th, .admin-table td { padding: 0.5rem; border: 1px solid #ccc; }
-    #admin-view { display: none; }
-    #admin-btn { font-size: 0.9rem; background: none; color: #555; border: none; text-decoration: underline; cursor: pointer; margin-top: 1rem; }
+    input, button { font-size: 1rem; padding: 0.5rem 1rem; margin: 0.5rem; }
+    #admin-view { display: none; margin-top: 2rem; }
+    table { margin: 0 auto; border-collapse: collapse; width: 90%; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; }
   </style>
 </head>
 <body>
-  <h1>Group Spinner Tool</h1>
-
-  <div id="view-selector">
-    <button onclick="showWithName()">Spin (With Name)</button>
-    <button id="admin-btn" onclick="requestAdminAccess()">For Admin</button>
+  <h2>Group Spinner</h2>
+  <div>
+    <input type="text" id="name" placeholder="Enter your name" />
+    <button onclick="spin()">🎡 Spin</button>
+    <button onclick="showAdmin()">For Admin</button>
   </div>
-
-  <div id="with-name-view" style="display:none;">
-    <input type="text" id="student-name" placeholder="Enter your name">
-    <button onclick="assignGroupWithName()">🎡 Spin</button>
-    <div class="group-box" id="with-name-result"></div>
-  </div>
-
+  <div id="result" style="margin-top: 1rem; font-weight: bold;"></div>
   <div id="admin-view">
-    <h2>Admin Panel</h2>
-    <table class="admin-table">
-      <thead>
-        <tr><th>Group</th><th>Students & Roles</th></tr>
-      </thead>
-      <tbody id="admin-table-body"></tbody>
+    <h3>Admin Panel</h3>
+    <table>
+      <thead><tr><th>Group</th><th>Members (Roles)</th></tr></thead>
+      <tbody id="admin-body"></tbody>
     </table>
   </div>
 
 <script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyAcjM_P_w0hJFnKlKB7yPtuWMncLzEoo24",
-    authDomain: "group-spinner.firebaseapp.com",
-    projectId: "group-spinner",
-    storageBucket: "group-spinner.firebasestorage.app",
-    messagingSenderId: "323238343002",
-    appId: "1:323238343002:web:2766fdafa93a85d0dac363",
-    measurementId: "G-MZ27VGGBV4",
-    databaseURL: "https://group-spinner-default-rtdb.firebaseio.com"
-  };
+const config = {
+  apiKey: "AIzaSyAcjM_P_w0hJFnKlKB7yPtuWMncLzEoo24",
+  authDomain: "group-spinner.firebaseapp.com",
+  databaseURL: "https://group-spinner-default-rtdb.firebaseio.com",
+  projectId: "group-spinner",
+  storageBucket: "group-spinner.firebasestorage.app",
+  messagingSenderId: "323238343002",
+  appId: "1:323238343002:web:2766fdafa93a85d0dac363"
+};
+firebase.initializeApp(config);
+const db = firebase.database();
+const max = 5;
 
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-  const maxGroupSize = 5;
-  const adminPassword = "oxford2025";
-
-  function requestAdminAccess() {
-    const attempt = window.prompt("Enter admin password:");
-    if (attempt === adminPassword) {
-      document.getElementById('admin-view').style.display = 'block';
-      loadAdminData();
+function spin() {
+  const name = document.getElementById("name").value.trim();
+  if (!name) return alert("Enter your name first.");
+  db.ref("assignments/" + name).once("value", snap => {
+    if (snap.exists()) {
+      const { group, role } = snap.val();
+      document.getElementById("result").innerText = `✅ You are already in ${group} as Role ${role}`;
     } else {
-      alert("Incorrect password.");
+      assign(name);
     }
-  }
+  });
+}
 
-  function assignGroupWithName() {
-    const name = document.getElementById('student-name').value.trim();
-    if (!name) return alert('Please enter your name.');
-
-    db.ref('assignments/' + name).once('value', (snapshot) => {
-      if (snapshot.exists()) {
-        const { group, role } = snapshot.val();
-        document.getElementById('with-name-result').textContent = `✅ You are already in ${group} as Role ${role}`;
-      } else {
-        allocateNewGroup(name);
-      }
+function assign(name) {
+  db.ref("assignments").once("value", snap => {
+    const data = snap.val() || {};
+    const counts = {}, roles = {};
+    Object.entries(data).forEach(([n, {group, role}]) => {
+      counts[group] = (counts[group] || 0) + 1;
+      roles[group] = roles[group] || new Set();
+      roles[group].add(role);
     });
-  }
-
-  function allocateNewGroup(name) {
-    db.ref('assignments').once('value', (snapshot) => {
-      const data = snapshot.val() || {};
-      const groupSizes = {};
-      const groupRoles = {};
-
-      for (const student in data) {
-        const entry = data[student];
-        if (!groupSizes[entry.group]) groupSizes[entry.group] = 0;
-        groupSizes[entry.group]++;
-        if (!groupRoles[entry.group]) groupRoles[entry.group] = new Set();
-        groupRoles[entry.group].add(entry.role);
+    let target = null, size = Infinity;
+    for (let i = 1; i <= Object.keys(counts).length + 1; i++) {
+      const g = "Group " + i;
+      const s = counts[g] || 0;
+      if (s < max && s < size) {
+        target = g;
+        size = s;
       }
+    }
+    let role = 1;
+    const used = roles[target] || new Set();
+    while (used.has(role)) role++;
+    db.ref("assignments/" + name).set({ group: target, role });
+    document.getElementById("result").innerText = `🎉 You are in ${target} as Role ${role}`;
+  });
+}
 
-      let targetGroup = null;
-      let minSize = Infinity;
-
-      for (let i = 1; i <= Object.keys(groupSizes).length + 1; i++) {
-        const groupName = `Group ${i}`;
-        const size = groupSizes[groupName] || 0;
-        if (size < maxGroupSize && size < minSize) {
-          targetGroup = groupName;
-          minSize = size;
-        }
-      }
-
-      let role = 1;
-      const usedRoles = groupRoles[targetGroup] || new Set();
-      while (usedRoles.has(role)) role++;
-
-      db.ref('assignments/' + name).set({ group: targetGroup, role });
-      document.getElementById('with-name-result').textContent = `🎉 ${name}, you are in ${targetGroup} as Role ${role}!`;
+function showAdmin() {
+  const pwd = prompt("Admin password?");
+  if (pwd !== "oxford2025") return alert("Wrong password.");
+  document.getElementById("admin-view").style.display = "block";
+  db.ref("assignments").on("value", snap => {
+    const data = snap.val() || {}, map = {};
+    Object.entries(data).forEach(([n, {group, role}]) => {
+      if (!map[group]) map[group] = [];
+      map[group].push(`${n} (Role ${role})`);
     });
-  }
-
-  function loadAdminData() {
-    db.ref('assignments').on('value', (snapshot) => {
-      const data = snapshot.val() || {};
-      const groupMap = {};
-
-      for (const name in data) {
-        const { group, role } = data[name];
-        if (!groupMap[group]) groupMap[group] = [];
-        groupMap[group].push(`${name} (Role ${role})`);
-      }
-
-      const tbody = document.getElementById('admin-table-body');
-      tbody.innerHTML = '';
-      Object.keys(groupMap).sort().forEach(group => {
-        const row = `<tr><td>${group}</td><td>${groupMap[group].join(', ')}</td></tr>`;
-        tbody.innerHTML += row;
-      });
+    const body = document.getElementById("admin-body");
+    body.innerHTML = "";
+    Object.keys(map).sort().forEach(g => {
+      const row = `<tr><td>${g}</td><td>${map[g].join(", ")}</td></tr>`;
+      body.innerHTML += row;
     });
-  }
-
-  function showWithName() {
-    hideAll();
-    document.getElementById('with-name-view').style.display = 'block';
-  }
-
-  function hideAll() {
-    document.getElementById('with-name-view').style.display = 'none';
-    document.getElementById('admin-view').style.display = 'none';
-  }
+  });
+}
 </script>
 </body>
 </html>
